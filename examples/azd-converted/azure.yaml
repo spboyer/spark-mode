@@ -1,0 +1,90 @@
+# Azure Developer CLI Configuration
+name: recipe-finder-ai
+metadata:
+  template: recipe-finder-ai@0.0.1-beta
+
+# Define the services that make up the application
+services:
+  # Frontend - React SPA hosted on Static Web Apps
+  frontend:
+    language: js
+    host: staticwebapp
+    dist: dist
+
+  # Backend API - Azure Functions for recipe management
+  api:
+    language: js
+    host: function
+    functionApp: ../api
+
+# Infrastructure configuration
+infra:
+  # Provider configuration
+  provider: bicep
+  path: infra
+
+  # Define infrastructure parameters
+  parameters:
+    # Application settings
+    appName: recipe-finder
+    environment: ${AZURE_ENV_NAME}
+    location: ${AZURE_LOCATION}
+    
+    # OpenAI configuration
+    openAiLocation: eastus
+    openAiSkuName: S0
+    
+    # Cosmos DB configuration
+    cosmosDbAccountName: ${appName}-cosmos-${environment}
+    cosmosDbDatabaseName: recipes
+    
+    # Static Web App configuration
+    staticWebAppName: ${appName}-web-${environment}
+    staticWebAppSku: Free
+
+# Hooks for custom deployment logic
+hooks:
+  # Pre-provision hook to validate prerequisites
+  preprovision:
+    shell: sh
+    run: |
+      echo "Validating Azure prerequisites..."
+      az extension add --name staticwebapp --upgrade
+
+  # Post-provision hook to configure services
+  postprovision:
+    shell: sh
+    run: |
+      echo "Configuring application settings..."
+      # Set up environment variables for the web app
+      az staticwebapp appsettings set \
+        --name ${AZURE_STATIC_WEB_APP_NAME} \
+        --setting-names \
+        REACT_APP_API_URL=${AZURE_FUNCTION_APP_URL} \
+        REACT_APP_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+
+  # Pre-deploy hook for build optimization
+  predeploy:
+    shell: sh
+    run: |
+      echo "Building optimized application..."
+      npm install
+      npm run build
+
+# Environment-specific configurations
+environments:
+  development:
+    services:
+      frontend:
+        config:
+          environmentVariables:
+            NODE_ENV: development
+            REACT_APP_DEBUG: true
+      
+  production:
+    services:
+      frontend:
+        config:
+          environmentVariables:
+            NODE_ENV: production
+            REACT_APP_DEBUG: false
