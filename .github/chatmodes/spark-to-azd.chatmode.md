@@ -348,10 +348,43 @@ resource flexConsumptionPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
    - Create comprehensive API endpoints for LLM and KV replacements
 
 4. **Local Validation and Testing**:
+   **CRITICAL: Azurite Storage Emulator Required**
+   
+   Before running Azure Functions locally, ensure Azurite is installed and running:
+   ```bash
+   # Install Azurite globally (if not already installed)
+   npm install -g azurite
+   
+   # Start Azurite storage emulator (run in separate terminal)
+   azurite --silent --location ./azurite --debug ./azurite/debug.log
+   
+   # Verify Azurite endpoints are available:
+   # Blob service: http://127.0.0.1:10000
+   # Queue service: http://127.0.0.1:10001  
+   # Table service: http://127.0.0.1:10002
+   ```
+   
+   **Local Settings Configuration**:
+   ```json
+   // local.settings.json for Azure Functions
+   {
+     "IsEncrypted": false,
+     "Values": {
+       "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+       "FUNCTIONS_WORKER_RUNTIME": "node",
+       "AZURE_OPENAI_ENDPOINT": "your-openai-resource", // Triggers mock mode
+       "COSMOS_DB_ENDPOINT": "https://localhost:8081" // Cosmos DB Emulator
+     }
+   }
+   ```
+   
+   **Local Testing Workflow**:
+   - **Start Azurite first**: `azurite --silent --location ./azurite`
    - Start Functions app locally and monitor startup output for errors
    - Clean shutdown existing instances: `pkill -9 -f func` (macOS/Linux)
    - Achieve 80%+ test coverage before deployment
    - Validate API endpoints with proper authentication
+   - Test Functions endpoints at `http://localhost:7071/api/`
 
 5. **Deployment and Configuration**:
    - Use `azd up` with managed identity and **Flex Consumption plan (FC1)**
