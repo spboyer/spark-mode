@@ -1914,3 +1914,66 @@ When implementing Azure OpenAI deployments, follow this process:
 - Reduces deployment failures from deprecated models
 - Enables informed model selection based on latest capabilities
 - Provides audit trail of model selection decisions
+
+### Azure Functions Local Development Issues
+
+**Error Message:**
+```
+Cannot connect to the Storage Emulator. Start the Storage Emulator and try again.
+Failed to initialize Storage Emulator
+```
+
+**Root Cause:**
+Azure Functions require Azure Storage for runtime operations, but the local storage emulator (Azurite) is not running or properly configured.
+
+**Solution: Install and Configure Azurite**
+
+**Step 1: Install Azurite Globally**
+```bash
+# Install Azurite storage emulator
+npm install -g azurite
+
+# Verify installation
+azurite --version
+```
+
+**Step 2: Start Azurite Before Functions**
+```bash
+# Start Azurite in separate terminal (keep running)
+azurite --silent --location ./azurite --debug ./azurite/debug.log
+
+# Verify endpoints are available:
+# Blob service: http://127.0.0.1:10000
+# Queue service: http://127.0.0.1:10001  
+# Table service: http://127.0.0.1:10002
+```
+
+**Step 3: Configure local.settings.json**
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AZURE_OPENAI_ENDPOINT": "your-openai-resource",
+    "COSMOS_DB_ENDPOINT": "https://localhost:8081"
+  }
+}
+```
+
+**Step 4: Local Development Workflow**
+1. **Start Azurite first**: `azurite --silent --location ./azurite`
+2. **Start Functions**: `func start` (in Functions directory)
+3. **Test endpoints**: Functions available at `http://localhost:7071/api/`
+4. **Clean shutdown**: Use `Ctrl+C` to stop Functions, then stop Azurite
+
+**Prevention:**
+- Always start Azurite before running `func start`
+- Include Azurite startup in development documentation
+- Consider using Docker Compose for unified local environment
+- Add Azurite status check to pre-development scripts
+
+**Troubleshooting:**
+- **Port conflicts**: Change Azurite ports with `--blobPort`, `--queuePort`, `--tablePort`
+- **Permission issues**: Run with appropriate permissions or use `--location` with writable directory
+- **Clean restart**: Delete `./azurite` folder to reset emulator state
