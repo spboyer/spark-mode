@@ -18,8 +18,9 @@ This mode is specifically designed for enterprise environments that enforce Azur
 The **Spark to AZD** custom mode:
 
 - 📋 **Enforces** enterprise security requirements (managed identity mandatory)
-- � **Clones** GitHub repositories automatically for complete codebase analysis
-- �🔍 **Analyzes** GitHub Spark template structure (`spark.meta.json`, Vite config, React components)
+- 🛡️ **Prevents** common deployment errors with built-in validation and best practices
+- 🔄 **Clones** GitHub repositories automatically for complete codebase analysis
+- 🔍 **Analyzes** GitHub Spark template structure (`spark.meta.json`, Vite config, React components)
 - 🔧 **Converts** complete frontend code (removes ALL Spark dependencies, replaces `spark.llmPrompt()` and `useKV()` calls)
 - ✅ **Validates** build process (`npm run build` MUST pass without errors - conversion incomplete until validated)
 - 🛡️ **Implements** Azure Functions API layer (MANDATORY for enterprise policy compliance)
@@ -34,6 +35,30 @@ The **Spark to AZD** custom mode:
 - 🔒 **Ensures** enterprise security with Key Vault and Entra ID
 - 🚀 **Provides** complete CI/CD pipeline setup
 - 🔍 **Uses** Azure Verified Module templates for infrastructure reliability
+
+## 🚨 Error Prevention Features
+
+This mode includes comprehensive error prevention based on real enterprise deployment experiences:
+
+### ⚠️ Infrastructure Errors Prevented
+- **OpenAI API Version Issues**: Automatically uses latest API versions with correct `sku` property (not deprecated `scaleSettings`)
+- **Storage Account Policy Violations**: Configures `allowSharedKeyAccess: false` for enterprise compliance
+- **Cosmos DB Role Assignment Failures**: Uses correct built-in role IDs and proper scope assignments
+- **Function App FC1 Configuration**: Includes mandatory `functionAppConfig` for Flex Consumption plans
+- **Template Validation Failures**: Ensures `main.parameters.json` exists and matches Bicep parameters
+
+### 🔧 Frontend Build Errors Prevented
+- **Dependency Conflicts**: Mandatory cleanup process (`rm -rf node_modules package-lock.json`)
+- **Tailwind CSS Issues**: Replaces Spark-specific variables with standard shadcn/ui configuration
+- **Missing CSS Variables**: Provides complete CSS variable definitions
+- **TypeScript Compilation Errors**: Validates with `npx tsc --noEmit` before deployment
+- **Build Process Failures**: Ensures `npm run build` passes without errors
+
+### 🛡️ Security Compliance Errors Prevented
+- **API Keys in Client Code**: Enforces Azure Functions API layer for all Azure service access
+- **Local Authentication Issues**: Configures `disableLocalAuth: true` on all Azure services
+- **Managed Identity Misconfigurations**: Proper RBAC role assignments for all services
+- **Enterprise Policy Violations**: Follows Azure Safe Secrets Standard requirements
 
 ## Installation
 
@@ -236,6 +261,7 @@ your-app/
 
 ### Best Practices Implemented
 
+- ✅ **Error Prevention**: Built-in validation for common deployment failures
 - ✅ **Repository Analysis**: Automatic cloning and complete codebase analysis
 - ✅ **Complete Code Conversion**: All Spark dependencies removed, frontend fully converted
 - ✅ **Build Validation**: `npm run build` must pass before deployment
@@ -357,6 +383,24 @@ your-app/
 - **Storage Account**: File storage and static assets
 
 ## Troubleshooting
+
+### 🛡️ Built-in Error Prevention
+
+The chat mode now includes comprehensive error prevention for the most common deployment failures:
+
+#### Automatically Prevented Infrastructure Errors:
+- ✅ **OpenAI API Version Compliance**: Uses `sku` instead of deprecated `scaleSettings`
+- ✅ **Storage Account Enterprise Policy**: Configures `allowSharedKeyAccess: false` with proper RBAC
+- ✅ **Cosmos DB Role Assignments**: Uses correct built-in role IDs (`00000000-0000-0000-0000-000000000002`)
+- ✅ **Function App FC1 Configuration**: Includes mandatory `functionAppConfig` with deployment.storage
+- ✅ **Template Parameter Validation**: Ensures `main.parameters.json` exists and matches Bicep
+
+#### Automatically Prevented Frontend Errors:
+- ✅ **Build Dependency Conflicts**: Mandatory `rm -rf node_modules package-lock.json` cleanup
+- ✅ **Tailwind CSS Spark Issues**: Replaces Spark variables with standard shadcn/ui config
+- ✅ **Missing CSS Variables**: Provides complete variable definitions
+- ✅ **TypeScript Compilation**: Validates with `npx tsc --noEmit`
+- ✅ **Build Process**: Ensures `npm run build` passes before deployment
 
 ### Critical Production Issues (from Enterprise Deployments)
 
