@@ -39,6 +39,142 @@ Based on application analysis, target one of these specific Azure architecture s
 
 ## Core Responsibilities
 
+### ⚠️ CRITICAL ERROR PREVENTION ⚠️
+**MANDATORY: Apply these fixes to prevent common deployment failures**
+
+#### 1. OpenAI API Version Compliance
+**ERROR**: `The scale settings of account deployment is deprecated since API version '2023-05-01', please use 'sku' instead`
+**PREVENTION**: Always use latest API versions and correct property names:
+```bicep
+// ❌ DEPRECATED - DO NOT USE
+resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
+  properties: {
+    scaleSettings: { // DEPRECATED
+      scaleType: 'Standard'
+      capacity: 10
+    }
+  }
+}
+
+// ✅ CORRECT - ALWAYS USE
+resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-10-01-preview' = {
+  sku: {
+    name: 'Standard'
+    capacity: 10
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-4'
+      version: '0613'
+    }
+  }
+}
+```
+
+#### 2. Frontend Build Dependency Issues
+**ERROR**: npm/rollup dependency conflicts requiring clean reinstall
+**PREVENTION**: Always include dependency cleanup in conversion process:
+```bash
+# MANDATORY cleanup before conversion
+rm -rf node_modules package-lock.json dist
+npm install
+npm run build  # Must pass without errors
+```
+
+#### 3. Tailwind CSS Spark-Specific Issues
+**ERROR**: CSS variables referencing Spark theme system causing build failures
+**PREVENTION**: Replace Spark Tailwind config with standard shadcn/ui config:
+```javascript
+// ❌ PROBLEMATIC - Spark-specific variables
+theme: {
+  extend: {
+    colors: {
+      'spark-primary': 'var(--spark-primary)',
+      'spark-secondary': 'var(--spark-secondary)'
+    }
+  }
+}
+
+// ✅ CORRECT - Standard shadcn/ui variables
+theme: {
+  extend: {
+    colors: {
+      border: "hsl(var(--border))",
+      background: "hsl(var(--background))",
+      foreground: "hsl(var(--foreground))",
+      primary: {
+        DEFAULT: "hsl(var(--primary))",
+        foreground: "hsl(var(--primary-foreground))"
+      }
+    }
+  }
+}
+```
+
+#### 4. Storage Account Enterprise Policy Compliance
+**ERROR**: `RequestDisallowedByPolicy: Local authentication methods are not allowed`
+**PREVENTION**: ALWAYS configure storage accounts for enterprise compliance:
+```bicep
+// ✅ ENTERPRISE COMPLIANT - MANDATORY
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-04-01' = {
+  properties: {
+    allowSharedKeyAccess: false  // CRITICAL for enterprise compliance
+    defaultToOAuthAuthentication: true
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
+    supportsHttpsTrafficOnly: true
+  }
+}
+
+// MANDATORY: Role assignments for Function App managed identity
+resource storageBlobDataOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+```
+
+#### 5. Cosmos DB Role Assignment Corrections
+**ERROR**: Invalid role definition ID causing deployment failures
+**PREVENTION**: Use correct Cosmos DB data plane role assignments:
+```bicep
+// ✅ CORRECT - Cosmos DB Data Contributor (built-in)
+resource cosmosDbRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-11-15' = {
+  properties: {
+    // Use built-in Cosmos DB Data Contributor role
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
+    principalId: managedIdentity.properties.principalId
+    scope: cosmosAccount.id
+  }
+}
+
+// OR create custom role with specific permissions
+resource customCosmosRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2023-11-15' = {
+  properties: {
+    roleName: 'Recipe App Data Contributor'
+    type: 'CustomRole'
+    assignableScopes: [cosmosAccount.id]
+    permissions: [{
+      dataActions: [
+        'Microsoft.DocumentDB/databaseAccounts/readMetadata'
+        'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*'
+      ]
+    }]
+  }
+}
+```
+
+#### 6. Template Validation Procedures
+**PREVENTION**: Always validate templates before deployment:
+```bash
+# MANDATORY validation steps
+az bicep build --file infra/main.bicep  # Check syntax
+azd provision --preview                 # Validate parameters
+```
+
 ### 0. Repository Setup (if GitHub URL provided)
 **MANDATORY FIRST ACTION: Clone repository for complete context**
 - Always use terminal commands to clone the provided GitHub repository
@@ -265,8 +401,76 @@ infra/
 │   ├── staticWebApp.bicep
 │   ├── containerApp.bicep
 │   ├── functionApp.bicep
-│   └── cosmosdb.bicep
+│   ├── openai.bicep     # CRITICAL: Use latest API versions
+│   └── cosmosdb.bicep   # CRITICAL: Use correct role assignments
 └── abbreviations.json   # Azure resource naming conventions
+```
+
+**🚨 CRITICAL: Azure OpenAI Module Template (Prevents API version errors)**
+```bicep
+// ✅ CORRECT - Latest API version and property names
+resource openAIAccount 'Microsoft.CognitiveServices/accounts@2023-10-01-preview' = {
+  name: openAIName
+  location: location
+  kind: 'OpenAI'
+  sku: {
+    name: skuName  // Use 'sku' not deprecated 'scale'
+  }
+  properties: {
+    customSubDomainName: openAIName
+    disableLocalAuth: true  // ENTERPRISE REQUIREMENT
+    publicNetworkAccess: 'Enabled'
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+}
+
+// ✅ CORRECT - Model deployment with proper configuration
+resource gptDeployment 'Microsoft.CognitiveServices/accounts/deployments@2023-10-01-preview' = {
+  parent: openAIAccount
+  name: 'gpt-4'
+  sku: {
+    name: 'Standard'
+    capacity: 10  // Use 'capacity' in sku, not 'scaleSettings'
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-4'
+      version: '0613'  // Use current stable version
+    }
+    versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
+  }
+}
+```
+
+**🚨 CRITICAL: Cosmos DB Module Template (Prevents role assignment errors)**
+```bicep
+// ✅ CORRECT - Cosmos DB with proper role assignments
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
+  name: cosmosAccountName
+  properties: {
+    databaseAccountOfferType: 'Standard'
+    disableLocalAuth: true  // ENTERPRISE REQUIREMENT
+    capabilities: [{ name: 'EnableServerless' }]
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+}
+
+// ✅ CORRECT - Built-in Cosmos DB Data Contributor role
+resource cosmosRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-11-15' = {
+  parent: cosmosAccount
+  name: guid(cosmosAccount.id, functionApp.identity.principalId)
+  properties: {
+    // Use built-in role ID (prevents invalid role definition errors)
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
+    principalId: functionApp.identity.principalId
+    scope: cosmosAccount.id
+  }
+}
 ```
 
 **Infrastructure Generation Process:**
@@ -278,20 +482,20 @@ infra/
 
 **Azure Functions Infrastructure Requirements (FC1 Mandatory)**:
 ```bicep
-// ALWAYS use this configuration for Azure Functions
+// ✅ CORRECT FC1 Configuration - Prevents common deployment errors
 resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
   name: functionAppName
-  location: location
   kind: 'functionapp'
   properties: {
     serverFarmId: flexConsumptionPlan.id
+    // CRITICAL: functionAppConfig required for FC1
     functionAppConfig: {
       deployment: {
         storage: {
           type: 'blobContainer'
-          value: '${storageAccount.properties.primaryEndpoints.blob}deploymentpackage'
+          value: '${storageAccount.properties.primaryEndpoints.blob}deployments'
           authentication: {
-            type: 'SystemAssignedIdentity'
+            type: 'SystemAssignedIdentity'  // PREVENTS storage auth errors
           }
         }
       }
@@ -299,15 +503,31 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         maximumInstanceCount: 100
         instanceMemoryMB: 2048
       }
-      runtime: {
-        name: 'node'
-        version: '~20'
-      }
     }
+    // ENTERPRISE COMPLIANCE: Disable shared key access
+    siteConfig: {
+      appSettings: [
+        {
+          name: 'AzureWebJobsStorage__accountName'
+          value: storageAccount.name  // Use identity, not connection string
+        }
+        {
+          name: 'FUNCTIONS_EXTENSION_VERSION'
+          value: '~4'
+        }
+        {
+          name: 'FUNCTIONS_WORKER_RUNTIME'
+          value: 'node'
+        }
+      ]
+    }
+  }
+  identity: {
+    type: 'SystemAssigned'  // CRITICAL for enterprise compliance
   }
 }
 
-// FC1 Hosting Plan (NEVER use Y1)
+// ✅ CORRECT FC1 Hosting Plan (NEVER use Y1 - causes failures)
 resource flexConsumptionPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: planName
   location: location
@@ -316,7 +536,33 @@ resource flexConsumptionPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
     tier: 'FlexConsumption'
   }
   properties: {
-    reserved: true
+    reserved: true  // Linux required for FC1
+  }
+}
+
+// ✅ CRITICAL: Storage account with enterprise compliance
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-04-01' = {
+  name: storageAccountName
+  properties: {
+    allowSharedKeyAccess: false          // PREVENTS policy violation
+    defaultToOAuthAuthentication: true   // ENTERPRISE REQUIREMENT
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+    allowBlobPublicAccess: false
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+}
+
+// ✅ MANDATORY: Role assignments for managed identity
+resource storageBlobDataOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, functionApp.id, 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+  scope: storageAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 ```
@@ -542,28 +788,123 @@ If the Spark app uses `spark.llmPrompt()` or `useKV()`, Azure Functions API laye
 4. Verify environment variable mappings and Key Vault references
 5. **Common failure point check**: Confirm main.parameters.json contains all required parameters
 
+**🚨 CRITICAL: Error Prevention Validation Checklist**
+
+**OpenAI API Compliance Check:**
+- [ ] Using API version `2023-10-01-preview` or later
+- [ ] Model deployments use `sku` property, NOT `scaleSettings`
+- [ ] Model properties use `capacity` in sku, NOT `scale`
+- [ ] All deployments have proper `versionUpgradeOption`
+
+**Enterprise Policy Compliance Check:**
+- [ ] Storage accounts have `allowSharedKeyAccess: false`
+- [ ] Storage accounts have `defaultToOAuthAuthentication: true`
+- [ ] Cosmos DB has `disableLocalAuth: true`
+- [ ] Azure OpenAI has `disableLocalAuth: true`
+- [ ] All services use managed identity authentication
+
+**Cosmos DB Role Assignment Check:**
+- [ ] Using built-in role ID: `00000000-0000-0000-0000-000000000002`
+- [ ] Role assignments target correct scope (account level)
+- [ ] Principal ID references Function App managed identity
+- [ ] Using latest API version `2023-11-15`
+
+**Frontend Build Validation:**
+- [ ] Complete dependency cleanup performed (`rm -rf node_modules package-lock.json`)
+- [ ] All Spark dependencies removed from package.json
+- [ ] Tailwind config uses standard variables, NOT Spark-specific
+- [ ] CSS variables properly defined in index.css
+- [ ] `npm run build` passes without errors
+- [ ] `npx tsc --noEmit` passes without TypeScript errors
+
+**Function App FC1 Compliance:**
+- [ ] Using SKU `FC1` with tier `FlexConsumption`
+- [ ] `functionAppConfig` includes deployment.storage configuration
+- [ ] Storage authentication uses `SystemAssignedIdentity`
+- [ ] All required role assignments configured
+
 **If azd provision fails with missing parameters:**
 - Use `bestpractices` and `extension_azd` tools to regenerate complete infrastructure
 - Double-check main.parameters.json structure matches main.bicep parameters
 - Verify environment-specific parameter values are properly defined
+- Validate all templates against error prevention checklist above
 
 ### Step 6: Frontend Build Validation and Code Completion
 **CRITICAL: Complete frontend code transformation and build validation**
 
-**a) Comprehensive Spark Cleanup:**
-1. **Remove Spark Dependencies**:
+**a) Comprehensive Spark Cleanup (Prevents Build Errors):**
+1. **MANDATORY: Complete Dependency Cleanup**:
    ```bash
+   # CRITICAL: Clean install prevents rollup/npm conflicts
+   rm -rf node_modules package-lock.json dist
+   
+   # Remove Spark dependencies
    npm uninstall @github/spark @github/github-spark
-   npm uninstall @phosphor-icons/react # Remove if unused icons like Sparkles
+   npm uninstall @phosphor-icons/react  # Known to cause build failures
+   
+   # Clean install with proper dependency resolution
+   npm install
    ```
 
 2. **Clean Spark Configuration Files**:
-   - Delete `spark.config.js` or `spark.config.ts`
-   - Remove `spark.meta.json`
-   - Clean up `.devcontainer` Spark-specific onCreate scripts
-   - Remove Spark-specific Vite plugins from `vite.config.ts`
+   ```bash
+   rm -f spark.config.js spark.meta.json
+   rm -rf .spark/
+   ```
 
-3. **Code Transformation**:
+3. **🚨 CRITICAL: Fix Tailwind Configuration (Prevents CSS build errors)**:
+   ```javascript
+   // ❌ REMOVE: Spark-specific Tailwind config
+   module.exports = {
+     theme: {
+       extend: {
+         colors: {
+           'spark-primary': 'var(--spark-primary)',  // CAUSES BUILD FAILURES
+         }
+       }
+     }
+   }
+   
+   // ✅ REPLACE WITH: Standard shadcn/ui configuration
+   export default {
+     content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+     theme: {
+       extend: {
+         colors: {
+           border: "hsl(var(--border))",
+           background: "hsl(var(--background))",
+           foreground: "hsl(var(--foreground))",
+           primary: {
+             DEFAULT: "hsl(var(--primary))",
+             foreground: "hsl(var(--primary-foreground))"
+           }
+         }
+       }
+     },
+     plugins: []
+   }
+   ```
+
+4. **Update CSS Variables (Prevents undefined CSS errors)**:
+   ```css
+   /* src/index.css - REPLACE Spark variables */
+   @tailwind base;
+   @tailwind components;
+   @tailwind utilities;
+   
+   @layer base {
+     :root {
+       --background: 0 0% 100%;
+       --foreground: 222.2 84% 4.9%;
+       --primary: 221.2 83.2% 53.3%;
+       --primary-foreground: 210 40% 98%;
+       --border: 214.3 31.8% 91.4%;
+       /* Add all required CSS variables */
+     }
+   }
+   ```
+
+5. **Code Transformation**:
    ```javascript
    // Replace all Spark AI function calls
    // OLD:
@@ -587,7 +928,7 @@ If the Spark app uses `spark.llmPrompt()` or `useKV()`, Azure Functions API laye
    const [data, setData] = useAzureData('user-preferences');
    ```
 
-4. **Icon and Component Cleanup**:
+6. **Icon and Component Cleanup**:
    - Remove unused Phosphor icons (especially `Sparkles`)
    - Replace Spark-specific components with standard React components
    - Update import statements to remove Spark dependencies
@@ -709,6 +1050,47 @@ Ensure the converted project works with standard azd workflow:
 - [ ] All required Azure resources defined in Bicep templates
 
 **CONVERSION IS ONLY COMPLETE WHEN ALL CHECKLIST ITEMS ARE VERIFIED** ✅
+
+### 🚨 CRITICAL: Error Prevention Validation Checklist
+
+**OpenAI API Compliance Check:**
+- [ ] Using API version `2023-10-01-preview` or later
+- [ ] Model deployments use `sku` property, NOT `scaleSettings`
+- [ ] Model properties use `capacity` in sku, NOT `scale`
+- [ ] All deployments have proper `versionUpgradeOption`
+
+**Enterprise Policy Compliance Check:**
+- [ ] Storage accounts have `allowSharedKeyAccess: false`
+- [ ] Storage accounts have `defaultToOAuthAuthentication: true`
+- [ ] Cosmos DB has `disableLocalAuth: true`
+- [ ] Azure OpenAI has `disableLocalAuth: true`
+- [ ] All services use managed identity authentication
+
+**Cosmos DB Role Assignment Check:**
+- [ ] Using built-in role ID: `00000000-0000-0000-0000-000000000002`
+- [ ] Role assignments target correct scope (account level)
+- [ ] Principal ID references Function App managed identity
+- [ ] Using latest API version `2023-11-15`
+
+**Frontend Build Validation:**
+- [ ] Complete dependency cleanup performed (`rm -rf node_modules package-lock.json`)
+- [ ] All Spark dependencies removed from package.json
+- [ ] Tailwind config uses standard variables, NOT Spark-specific
+- [ ] CSS variables properly defined in index.css
+- [ ] `npm run build` passes without errors
+- [ ] `npx tsc --noEmit` passes without TypeScript errors
+
+**Function App FC1 Compliance:**
+- [ ] Using SKU `FC1` with tier `FlexConsumption`
+- [ ] `functionAppConfig` includes deployment.storage configuration
+- [ ] Storage authentication uses `SystemAssignedIdentity`
+- [ ] All required role assignments configured
+
+**Template Validation:**
+- [ ] `az bicep build --file infra/main.bicep` passes syntax check
+- [ ] `azd provision --preview` passes parameter validation
+- [ ] main.parameters.json exists and matches main.bicep parameters
+- [ ] All modules reference correct API versions
 
 ## GitHub Spark to Azure Architecture Patterns
 
